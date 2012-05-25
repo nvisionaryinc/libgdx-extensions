@@ -23,6 +23,9 @@ import com.badlogic.gdx.math.collision.BoundingBox;
  * 
  */
 public class FontObjLoader {
+    
+    private static char _ReferenceCharacter = '_';
+    
 
     public static Map <Character, Mesh> loadObj (final InputStream in)
     {
@@ -63,6 +66,7 @@ public class FontObjLoader {
         final List <String> normals = new ArrayList <String> ();
         final List <String[][]> faces = new ArrayList <String[][]> ();
         final Map <Character, Mesh> fontMap = new HashMap <Character, Mesh> ();
+        float referenceEdge = 0.0f;
         
         vertices.add (null);
         normals.add (null);
@@ -100,7 +104,7 @@ public class FontObjLoader {
                 
                 List <String> usedVertices = new ArrayList <String> ();
                 List <String> usedNormals = new ArrayList <String> ();
-                Iterator<String[][]> faceIt = faces.iterator ();
+                final Iterator<String[][]> faceIt = faces.iterator ();
                 while (faceIt.hasNext ()) {
                     String [][] face = faceIt.next ();
                     String faceBack = "f";
@@ -124,7 +128,11 @@ public class FontObjLoader {
                     tempObj += faceBack + "\n";
                 }
                 Mesh tempMesh = ObjLoader.loadObjFromString (tempObj, flipV, useIndices);
-                tempMesh = normalizeMeshPosition (tempMesh);
+                if (tokens[0].charAt (0) == _ReferenceCharacter) {
+                    /* We need the inverse */
+                    referenceEdge = tempMesh.calculateBoundingBox ().getMin ().y * -1.0f;
+                }
+                tempMesh = normalizeMeshPosition (tempMesh, referenceEdge);
                 fontMap.put (Character.valueOf (tokens[0].charAt (0)), tempMesh);
             }
         }
@@ -132,27 +140,39 @@ public class FontObjLoader {
         return fontMap;
     }
     
-    public static Mesh normalizeMeshPosition (Mesh font)
+    public static Mesh normalizeMeshPosition (final Mesh font, final float referenceEdge)
     {
-        BoundingBox meshBB = font.calculateBoundingBox ();
-        Vector3 centerVector = meshBB.getCenter ();
-        centerVector.mul (-1.0f);
+        final BoundingBox meshBB = font.calculateBoundingBox ();
+        final Vector3 minVector = meshBB.getMin ();
+        minVector.mul (-1.0f);
         
         /* seems to be the number of faces so times 6 (3 vertices, 3 normals) */
-        int vertArraySize = font.getNumVertices () * 6;
-        float[] tempVerts = new float [vertArraySize];
+        final int vertArraySize = font.getNumVertices () * 6;
+        final float[] tempVerts = new float [vertArraySize];
         font.getVertices (tempVerts);
         
+        /* We want to lower/left align the character to the 0/0/0 coordinate */
         for (int i = 0; i < vertArraySize; i++) {
-            tempVerts[i++] += centerVector.x;
-            tempVerts[i++] += centerVector.y;
-            tempVerts[i] += centerVector.z;
+            tempVerts[i++] += minVector.x;
+            /* The Y coordinate needs to be aligned with the reference edge */
+            tempVerts[i++] += referenceEdge;
+            tempVerts[i] += minVector.z;
             /* skip the normals */
             i += 3;
         }
         
         font.setVertices (tempVerts);
         return font;
+    }
+    
+    public static void redefineReferenceCharacter (char newReference)
+    {
+        _ReferenceCharacter = newReference;
+    }
+    
+    public static char getReferenceCharacter ()
+    {
+        return _ReferenceCharacter;
     }
 
 }
